@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract Forwarder is ReentrancyGuard, Pausable, Ownable {
     using ECDSA for bytes32;
@@ -12,6 +13,12 @@ contract Forwarder is ReentrancyGuard, Pausable, Ownable {
     mapping(address => uint256) public nonces;
     mapping(address => bool) public blacklistedAddresses;
     uint256 public maxGasLimit = 500000;
+
+    uint256 public constant MAX_GAS_PRICE = 500 gwei;
+    uint256 public constant MIN_DELAY = 5 minutes;
+    uint256 public constant MAX_DELAY = 1 days;
+
+    mapping(bytes32 => bool) public executedTxs;
 
     bytes32 public constant EIP712_DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 public constant FORWARD_REQUEST_TYPEHASH = keccak256("ForwardRequest(address from,address to,uint256 value,uint256 gas,uint256 nonce,bytes data,uint256 validUntil)");
@@ -51,6 +58,13 @@ contract Forwarder is ReentrancyGuard, Pausable, Ownable {
         require(!blacklistedAddresses[req.from], "Forwarder: sender blacklisted");
         require(!blacklistedAddresses[req.to], "Forwarder: recipient blacklisted");
 
+        require(tx.gasprice <= MAX_GAS_PRICE, "Forwarder: gas price too high");
+        require(req.validUntil >= block.timestamp + MIN_DELAY, "Forwarder: min delay not met");
+        require(req.validUntil <= block.timestamp + MAX_DELAY, "Forwarder: max delay exceeded");
+
+        bytes32 txHash = keccak256(abi.encode(req, signature));
+        require(!executedTxs[txHash], "Forwarder: transaction already executed");
+
         bytes32 hash = keccak256(abi.encode(
             FORWARD_REQUEST_TYPEHASH,
             req.from,
@@ -77,6 +91,9 @@ contract Forwarder is ReentrancyGuard, Pausable, Ownable {
         require(verify(req, signature), "Forwarder: signature does not match request");
         require(req.nonce == nonces[req.from], "Forwarder: nonce mismatch");
 
+        bytes32 txHash = keccak256(abi.encode(req, signature));
+        executedTxs[txHash] = true;
+
         nonces[req.from]++;
 
         (bool success, ) = req.to.call{gas: req.gas, value: req.value}(req.data);
@@ -101,5 +118,13 @@ contract Forwarder is ReentrancyGuard, Pausable, Ownable {
 
     function unpause() external onlyOwner {
         _unpause();
+    }
+
+    function emergencyWithdraw() external onlyOwner {
+        payable(owner()).transfer(address(this).balance);
+    }
+
+    function emergencyERC20Withdraw(address token) external onlyOwner {
+        IERC20(token).transfer(owner(), IERC20(token).balanceOf(address(this)));
     }
 }
