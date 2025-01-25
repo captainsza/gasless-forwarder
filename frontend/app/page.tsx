@@ -53,13 +53,17 @@ export default function RelayPage() {
 
   const handleError = (error: any) => {
     console.error(error);
-    if (error.code === 4001) {
-      showAlert('warning', 'Transaction was rejected by user');
-    } else if (error.message.includes('user rejected')) {
-      showAlert('warning', 'Action cancelled by user');
-    } else {
-      showAlert('error', `Error: ${error.message}`);
+    let friendlyMessage = "An unknown error occurred. Check console for details.";
+
+    if (error.message.includes("could not decode result data")) {
+      friendlyMessage = "Unable to get nonce. Check if the contract and ABI are correct.";
+    } else if (error.code === "BAD_DATA") {
+      friendlyMessage = "The contract call returned invalid data. Please verify inputs.";
+    } else if (error.code === 4001 || error.message.includes("user rejected")) {
+      friendlyMessage = "Transaction was rejected by user.";
     }
+
+    showAlert('error', friendlyMessage);
   };
 
   const connectWallet = async () => {
@@ -266,21 +270,30 @@ export default function RelayPage() {
 
       const validUntil = Math.floor(Date.now() / 1000) + 3600;
 
-      const message = {
-        from: userAddr,
-        to: tokenAddress,
-        value: "0",
-        gas: "200000",
-        nonce: "0",
-        data: data,
-        validUntil: validUntil.toString()
-      };
-
       // Ensure verifyingContract is valid
       const verifyingContract = process.env.NEXT_PUBLIC_FORWARDER_ADDRESS;
       if (!verifyingContract || !ethers.isAddress(verifyingContract)) {
         throw new Error("Invalid forwarder address configuration");
       }
+
+      const forwarderContract = new ethers.Contract(
+        verifyingContract,
+        [
+          "function getNonce(address account) external view returns (uint256)"
+        ],
+        provider
+      );
+      const nextNonce = await forwarderContract.getNonce(userAddr);
+
+      const message = {
+        from: userAddr,
+        to: tokenAddress,
+        value: "0",
+        gas: "200000",
+        nonce: nextNonce.toString(),
+        data: data,
+        validUntil: validUntil.toString()
+      };
 
       const domain = {
         name: "GaslessForwarder",
@@ -308,7 +321,7 @@ export default function RelayPage() {
         to: ethers.getAddress(tokenAddress),
         value: "0",
         gas: "200000",
-        nonce: "0",
+        nonce: nextNonce.toString(),
         data: data,
         validUntil: validUntil.toString()
       };
@@ -387,7 +400,10 @@ export default function RelayPage() {
       // Call approve with proper formatting
       const tx = await tokenContract.approve(
         ethers.getAddress(forwarderAddress),
-        ethers.MaxUint256
+        ethers.MaxUint256,
+        {
+          gasLimit: 300000
+        }
       );
 
       console.log("Approval tx sent:", tx.hash);

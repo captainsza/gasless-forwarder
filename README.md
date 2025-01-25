@@ -19,7 +19,7 @@ A futuristic web3 application that enables users to perform gasless token transf
   - Token auto-detection
   - MetaMask integration
   - Real-time transaction status
-  - Cyberpunk-themed UI
+  - Good-themed UI
 
 ## 🏗️ Architecture
 
@@ -72,12 +72,39 @@ RPC_URL=your_rpc_url
 
 ```bash
 # Deploy contracts
+npx hardhat node
+
 npx hardhat run scripts/deploy.ts --network <network>
 
 # Start frontend
 cd frontend
 npm run dev
 ```
+
+## Explanation & Usage
+This project demonstrates a gasless transaction forwarder. Users can transfer ERC-20 or ERC-721 tokens without needing to hold ETH:
+1. A Forwarder contract collects signed data.
+2. A relayer (with ETH) forwards valid calls to the blockchain on users’ behalf.
+3. The UI allows specifying token details, performing approval, and sending gasless transfers with EIP-712 signatures.
+
+## Local Deployment
+1. Install dependencies:
+   ```
+   npm install
+   ```
+2. Start local Hardhat node:
+   ```
+   npx hardhat node
+   ```
+3. Deploy contracts:
+   ```
+   npx hardhat run scripts/deploy.ts --network localhost
+   ```
+4. Run frontend:
+   ```
+   cd frontend
+   npm run dev
+   ```
 
 ## 💡 How It Works
 
