@@ -8,7 +8,7 @@ node_modules
 # TypeChain files
 /typechain
 /typechain-types
-
+/frontend/.next
 # solidity-coverage files
 /coverage
 /coverage.json
