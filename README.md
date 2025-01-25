@@ -181,4 +181,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📧 Contact
 
-For support or queries, please open an issue or contact [your@email.com](mailto:your@email.com)
+For support or queries, please open an issue or contact [captainempire786@gmail.com](mailto:captainempire786@gmail.com)
