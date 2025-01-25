@@ -28,6 +28,13 @@ contract Forwarder is ReentrancyGuard, Pausable, Ownable {
     event TransactionForwarded(address indexed signer, address indexed to, uint256 nonce, bytes data);
     event AddressBlacklisted(address indexed account);
     event MaxGasLimitUpdated(uint256 newLimit);
+    event Debug(
+        string context,
+        address recovered,
+        address expected,
+        bytes32 hash,
+        bytes32 digest
+    );
 
     struct ForwardRequest {
         address from;
@@ -37,6 +44,14 @@ contract Forwarder is ReentrancyGuard, Pausable, Ownable {
         uint256 nonce;
         bytes data;
         uint256 validUntil;
+    }
+
+    // Add a struct to store verification info
+    struct VerificationInfo {
+        bool isValid;
+        address signer;
+        bytes32 hash;
+        bytes32 digest;
     }
 
     constructor(string memory _name, string memory _version) {
@@ -84,11 +99,46 @@ contract Forwarder is ReentrancyGuard, Pausable, Ownable {
         return signer == req.from;
     }
 
+    // Add a public function for verification with debug info
+    function verifyAndDebug(
+        ForwardRequest memory req,
+        bytes calldata signature
+    ) public returns (bool) {
+        bytes32 hash = keccak256(abi.encode(
+            FORWARD_REQUEST_TYPEHASH,
+            req.from,
+            req.to,
+            req.value,
+            req.gas,
+            req.nonce,
+            keccak256(req.data),
+            req.validUntil
+        ));
+
+        bytes32 digest = keccak256(
+            abi.encodePacked("\x19\x01", domainSeparator, hash)
+        );
+
+        address signer = digest.recover(signature);
+        
+        // Emit debug event here since it's not a view function
+        emit Debug(
+            "Verification",
+            signer,
+            req.from,
+            hash,
+            digest
+        );
+
+        return signer == req.from;
+    }
+
     function forward(
         ForwardRequest memory req,
         bytes calldata signature
     ) public payable nonReentrant whenNotPaused {
-        require(verify(req, signature), "Forwarder: signature does not match request");
+        // Change to call verifyAndDebug for debugging
+        require(verifyAndDebug(req, signature), "Forwarder: signature does not match request");
         require(req.nonce == nonces[req.from], "Forwarder: nonce mismatch");
 
         bytes32 txHash = keccak256(abi.encode(req, signature));

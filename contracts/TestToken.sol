@@ -4,7 +4,15 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract TestToken is ERC20 {
-    constructor() ERC20("TestToken", "TEST") {
-        _mint(msg.sender, 1000000 * 10 ** decimals());
+    constructor() ERC20("Test Token", "TEST") {
+        _mint(msg.sender, 1000000 * (10 ** uint256(decimals())));
+    }
+
+    function decimals() public view virtual override returns (uint8) {
+        return 18;
+    }
+
+    function symbol() public view virtual override returns (string memory) {
+        return "TEST";
     }
 }

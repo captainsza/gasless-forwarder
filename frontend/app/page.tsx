@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -7,12 +6,15 @@ import { ethers } from "ethers";
 import { motion } from "framer-motion";
 import LoadingSpinner from "./components/LoadingSpinner";
 import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
+import CyberAlert from "./components/CyberAlert";
+import { useEthereum } from "./hooks/useEthereum";
 
 const ERC20_ABI = [
   "function transfer(address recipient, uint256 amount) external returns (bool)",
   "function balanceOf(address account) external view returns (uint256)",
   "function symbol() external view returns (string)",
   "function decimals() external view returns (uint8)",
+  "function approve(address spender, uint256 amount) external returns (bool)",
 ];
 
 const ERC721_ABI = [
@@ -35,13 +37,37 @@ export default function RelayPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [walletError, setWalletError] = useState("");
+  const [isApproving, setIsApproving] = useState(false);
+  const [alert, setAlert] = useState<{
+    type: 'success' | 'error' | 'warning';
+    message: string;
+    isOpen: boolean;
+  }>({ type: 'success', message: '', isOpen: false });
+
+  const { hasMetaMask, provider } = useEthereum();
+
+  const showAlert = (type: 'success' | 'error' | 'warning', message: string) => {
+    setAlert({ type, message, isOpen: true });
+    setTimeout(() => setAlert(prev => ({ ...prev, isOpen: false })), 5000);
+  };
+
+  const handleError = (error: any) => {
+    console.error(error);
+    if (error.code === 4001) {
+      showAlert('warning', 'Transaction was rejected by user');
+    } else if (error.message.includes('user rejected')) {
+      showAlert('warning', 'Action cancelled by user');
+    } else {
+      showAlert('error', `Error: ${error.message}`);
+    }
+  };
 
   const connectWallet = async () => {
     setIsConnecting(true);
     setWalletError("");
 
     try {
-      if (typeof window.ethereum === "undefined") {
+      if (!window?.ethereum) {
         setWalletError("MetaMask is not installed!");
         return;
       }
@@ -56,8 +82,9 @@ export default function RelayPage() {
         setUserAddress(accounts[0]);
         
         // Also verify the connection with provider
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        await provider.getSigner(); // This ensures we have proper connection
+        if (provider) {
+          await provider.getSigner(); // This ensures we have proper connection
+        }
       } else {
         setWalletError("No accounts found!");
       }
@@ -71,7 +98,7 @@ export default function RelayPage() {
 
   const checkWalletConnection = async () => {
     try {
-      if (typeof window.ethereum === "undefined") {
+      if (!window?.ethereum) {
         setWalletError("MetaMask is not installed!");
         return;
       }
@@ -131,17 +158,45 @@ export default function RelayPage() {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const abi = tokenType === "ERC20" ? ERC20_ABI : ERC721_ABI;
-      const contract = new ethers.Contract(tokenAddress, abi, provider);
-      
-      const symbol = await contract.symbol();
-      let decimals;
-      if (tokenType === "ERC20") {
-        decimals = await contract.decimals();
+
+      if (!ethers.isAddress(tokenAddress)) {
+        setTokenInfo({ symbol: "Invalid Address", decimals: 18 });
+        return;
       }
-      
-      setTokenInfo({ symbol, decimals });
+
+      const contract = new ethers.Contract(tokenAddress, abi, provider);
+
+      try {
+        // Handle symbol first
+        let symbol = "Unknown";
+        try {
+          const symbolResult = await contract.symbol();
+          if (symbolResult) symbol = symbolResult;
+        } catch (error) {
+          console.warn("Error getting symbol:", error);
+        }
+
+        // Handle decimals
+        let decimals = 18;
+        if (tokenType === "ERC20") {
+          try {
+            const decimalsResult = await contract.decimals();
+            if (decimalsResult !== undefined) {
+              decimals = Number(decimalsResult);
+            }
+          } catch (error) {
+            console.warn("Error getting decimals:", error);
+          }
+        }
+
+        setTokenInfo({ symbol, decimals });
+      } catch (error) {
+        console.error("Contract call error:", error);
+        setTokenInfo({ symbol: "Error", decimals: 18 });
+      }
     } catch (error) {
-      console.error("Error fetching token info:", error);
+      console.error("Provider error:", error);
+      setTokenInfo({ symbol: "Error", decimals: 18 });
     }
   };
 
@@ -157,23 +212,84 @@ export default function RelayPage() {
       return;
     }
 
+    if (!ethers.isAddress(tokenAddress) || !ethers.isAddress(to)) {
+      setForwardStatus("Invalid address format");
+      return;
+    }
+
     setIsLoading(true);
     setIsSuccess(false);
 
     try {
+      // For ERC20 tokens, check and handle approval first
+      if (tokenType === "ERC20") {
+        setIsApproving(true);
+        try {
+          const approved = await approveForwarder();
+          if (!approved) {
+            throw new Error("Token approval failed");
+          }
+        } catch (error: any) {
+          throw new Error(`Approval failed: ${error.message}`);
+        } finally {
+          setIsApproving(false);
+        }
+      }
+
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      
       const chainId = (await provider.getNetwork()).chainId;
-      const nonce = 0; // You should fetch this from the contract
+      const userAddr = await signer.getAddress();
+
+      // Validate inputs
+      if (tokenType === "ERC20" && (!amount || isNaN(Number(amount)))) {
+        setForwardStatus("Please enter a valid amount");
+        return;
+      }
+
+      if (tokenType === "ERC721" && (!tokenId || isNaN(Number(tokenId)))) {
+        setForwardStatus("Please enter a valid token ID");
+        return;
+      }
+
+      // Prepare data
+      const abi = tokenType === "ERC20" ? ERC20_ABI : ERC721_ABI;
+      const iface = new ethers.Interface(abi);
+      
+      let data;
+      if (tokenType === "ERC20") {
+        const value = ethers.parseUnits(amount, tokenInfo.decimals || 18).toString();
+        data = iface.encodeFunctionData("transfer", [to, value]);
+      } else {
+        data = iface.encodeFunctionData("transferFrom", [userAddress, to, tokenId]);
+      }
+
+      const validUntil = Math.floor(Date.now() / 1000) + 3600;
+
+      const message = {
+        from: userAddr,
+        to: tokenAddress,
+        value: "0",
+        gas: "200000",
+        nonce: "0",
+        data: data,
+        validUntil: validUntil.toString()
+      };
+
+      // Ensure verifyingContract is valid
+      const verifyingContract = process.env.NEXT_PUBLIC_FORWARDER_ADDRESS;
+      if (!verifyingContract || !ethers.isAddress(verifyingContract)) {
+        throw new Error("Invalid forwarder address configuration");
+      }
 
       const domain = {
         name: "GaslessForwarder",
         version: "1",
-        chainId,
-        verifyingContract: process.env.NEXT_PUBLIC_FORWARDER_ADDRESS,
+        chainId: Number(chainId),
+        verifyingContract: verifyingContract
       };
 
+      // Remove EIP712Domain from types - it's handled internally
       const types = {
         ForwardRequest: [
           { name: "from", type: "address" },
@@ -182,34 +298,33 @@ export default function RelayPage() {
           { name: "gas", type: "uint256" },
           { name: "nonce", type: "uint256" },
           { name: "data", type: "bytes" },
-          { name: "validUntil", type: "uint256" },
-        ],
+          { name: "validUntil", type: "uint256" }
+        ]
       };
 
-      const abi = tokenType === "ERC20" ? ERC20_ABI : ERC721_ABI;
-      const iface = new ethers.Interface(abi);
-      
-      let data;
-      if (tokenType === "ERC20") {
-        const value = ethers.parseUnits(amount, tokenInfo.decimals || 18);
-        data = iface.encodeFunctionData("transfer", [to, value]);
-      } else {
-        data = iface.encodeFunctionData("transferFrom", [userAddress, to, tokenId]);
-      }
-
-      const validUntil = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-
-      const message = {
-        from: userAddress,
-        to: tokenAddress,
-        value: 0,
-        gas: 200000,
-        nonce: nonce,
+      // Format message values as strings
+      const messagevalues = {
+        from: ethers.getAddress(userAddr),
+        to: ethers.getAddress(tokenAddress),
+        value: "0",
+        gas: "200000",
+        nonce: "0",
         data: data,
-        validUntil: validUntil,
+        validUntil: validUntil.toString()
       };
 
-      const signature = await signer.signTypedData(domain, types, message);
+      console.log("Signing message:", {
+        domain,
+        types,
+        messagevalues
+      });
+
+      // Sign the message with proper types
+      const signature = await signer.signTypedData(
+        domain,
+        { ForwardRequest: types.ForwardRequest },
+        message
+      );
 
       const response = await fetch("/api/relay", {
         method: "POST",
@@ -217,24 +332,107 @@ export default function RelayPage() {
         body: JSON.stringify({ message, signature }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(result.error || 'Transaction failed');
       }
 
-      const result = await response.json();
+      showAlert('success', `Transaction sent! Hash: ${result.txHash}`);
       setForwardStatus(`Transaction sent! Hash: ${result.txHash}`);
       setIsSuccess(true);
     } catch (error: any) {
-      console.error(error);
-      setForwardStatus(`Error: ${error.message}`);
+      console.error("Transaction error:", error);
+      
+      // Handle specific error cases
+      if (error.message.includes('user rejected')) {
+        showAlert('warning', 'Transaction was rejected by user');
+      } else if (error.message.includes('insufficient funds')) {
+        showAlert('error', 'Insufficient funds for gas');
+      } else {
+        showAlert('error', `Error: ${error.message}`);
+      }
+      
       setIsSuccess(false);
+      setForwardStatus(`Error: ${error.message}`);
     } finally {
       setIsLoading(false);
+      setIsApproving(false);
+    }
+  };
+
+  const approveForwarder = async () => {
+    if (!window.ethereum || !connected || !tokenAddress) return false;
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      
+      // Get and validate forwarder address
+      const forwarderAddress = process.env.NEXT_PUBLIC_FORWARDER_ADDRESS;
+      if (!forwarderAddress || !ethers.isAddress(forwarderAddress)) {
+        throw new Error("Invalid forwarder address");
+      }
+
+      // Create contract instance
+      const tokenContract = new ethers.Contract(
+        ethers.getAddress(tokenAddress), // ensure checksummed address
+        ERC20_ABI,
+        signer
+      );
+
+      console.log("Approving forwarder:", forwarderAddress);
+      console.log("Token address:", tokenAddress);
+      
+      // Call approve with proper formatting
+      const tx = await tokenContract.approve(
+        ethers.getAddress(forwarderAddress),
+        ethers.MaxUint256
+      );
+
+      console.log("Approval tx sent:", tx.hash);
+      const receipt = await tx.wait();
+      console.log("Approval confirmed:", receipt.transactionHash);
+
+      showAlert('success', 'Token approval successful');
+      return true;
+    } catch (error: any) {
+      handleError(error);
+      return false;
+    }
+  };
+
+  const importTestToken = async () => {
+    if (!window.ethereum) return;
+    
+    const tokenAddress = process.env.NEXT_PUBLIC_TEST_TOKEN_ADDRESS;
+    if (!tokenAddress) return;
+
+    try {
+      await window.ethereum.request({
+        method: 'wallet_watchAsset',
+        params: {
+          type: 'ERC20',
+          options: {
+            address: tokenAddress,
+            symbol: 'TEST',
+            decimals: 18,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Error importing token:", error);
     }
   };
 
   return (
     <div className="min-h-screen bg-cyber-dark text-white">
+      <CyberAlert
+        type={alert.type}
+        message={alert.message}
+        isOpen={alert.isOpen}
+        onClose={() => setAlert(prev => ({ ...prev, isOpen: false }))}
+      />
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -276,7 +474,7 @@ export default function RelayPage() {
                 </motion.div>
               )}
 
-              {typeof window.ethereum === "undefined" && (
+              {!hasMetaMask && (
                 <a 
                   href="https://metamask.io/download/"
                   target="_blank"
@@ -368,9 +566,9 @@ export default function RelayPage() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={handleForwardTx}
-                disabled={isLoading}
+                disabled={isLoading || isApproving}
                 className={`w-full py-3 px-6 rounded-lg font-bold shadow-neon transition-all duration-300
-                  ${isLoading 
+                  ${(isLoading || isApproving)
                     ? 'bg-gray-600' 
                     : 'bg-gradient-to-r from-cyber-blue to-cyber-purple hover:shadow-neon-lg'
                   }`}
@@ -379,6 +577,11 @@ export default function RelayPage() {
                   <div className="flex items-center justify-center">
                     <LoadingSpinner />
                     <span className="ml-2">Processing...</span>
+                  </div>
+                ) : isApproving ? (
+                  <div className="flex items-center justify-center">
+                    <LoadingSpinner />
+                    <span className="ml-2">Approving Token...</span>
                   </div>
                 ) : (
                   "Send Gasless Transaction"
@@ -400,6 +603,13 @@ export default function RelayPage() {
                   <p className="text-sm break-all">{forwardStatus}</p>
                 </motion.div>
               )}
+
+              <button
+                onClick={importTestToken}
+                className="text-sm text-cyber-blue hover:text-cyber-pink"
+              >
+                Import Test Token to MetaMask
+              </button>
             </motion.div>
           )}
         </div>
