@@ -2,45 +2,15 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract Forwarder is ReentrancyGuard, Pausable, Ownable {
+contract Forwarder {
     using ECDSA for bytes32;
 
     mapping(address => uint256) public nonces;
-    mapping(address => bool) public blacklistedAddresses;
-    uint256 public maxGasLimit = 500000;
 
-    uint256 public constant MAX_GAS_PRICE = 500 gwei;
-    uint256 public constant MIN_DELAY = 5 minutes;
-    uint256 public constant MAX_DELAY = 1 days;
-
-    mapping(bytes32 => bool) public executedTxs;
-
-    // Add replay protection
-    mapping(bytes32 => bool) public executedSignatures;
-
-    // Add rate limiting
-    mapping(address => uint256) public lastTxTimestamp;
-    uint256 public constant MIN_TIME_BETWEEN_TX = 1 minutes;
-
-    bytes32 public constant EIP712_DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
-    bytes32 public constant FORWARD_REQUEST_TYPEHASH = keccak256("ForwardRequest(address from,address to,uint256 value,uint256 gas,uint256 nonce,bytes data,uint256 validUntil)");
-
-    bytes32 public domainSeparator;
-
-    event TransactionForwarded(address indexed signer, address indexed to, uint256 nonce, bytes data);
-    event AddressBlacklisted(address indexed account);
-    event MaxGasLimitUpdated(uint256 newLimit);
-    event Debug(
-        string context,
-        address recovered,
-        address expected,
-        bytes32 hash,
-        bytes32 digest
+    bytes32 public immutable DOMAIN_SEPARATOR;
+    bytes32 public constant FORWARD_REQUEST_TYPEHASH = keccak256(
+        "ForwardRequest(address from,address to,uint256 value,uint256 gas,uint256 nonce,bytes data,uint256 validUntil)"
     );
 
     struct ForwardRequest {
@@ -53,149 +23,55 @@ contract Forwarder is ReentrancyGuard, Pausable, Ownable {
         uint256 validUntil;
     }
 
-    // Add a struct to store verification info
-    struct VerificationInfo {
-        bool isValid;
-        address signer;
-        bytes32 hash;
-        bytes32 digest;
+    event TransactionForwarded(address indexed from, address indexed to, uint256 nonce);
+
+    constructor() {
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256("GaslessForwarder"),
+                keccak256("1"),
+                block.chainid,
+                address(this)
+            )
+        );
     }
 
-    constructor(string memory _name, string memory _version) {
-        domainSeparator = keccak256(abi.encode(
-            EIP712_DOMAIN_TYPEHASH,
-            keccak256(bytes(_name)),
-            keccak256(bytes(_version)),
-            block.chainid,
-            address(this)
-        ));
-    }
-
-    function verify(
-        ForwardRequest memory req,
-        bytes calldata signature
-    ) public view returns (bool) {
-        require(req.validUntil > block.timestamp, "Forwarder: request expired");
-        require(req.gas <= maxGasLimit, "Forwarder: gas limit too high");
-        require(!blacklistedAddresses[req.from], "Forwarder: sender blacklisted");
-        require(!blacklistedAddresses[req.to], "Forwarder: recipient blacklisted");
-
-        // require(tx.gasprice <= MAX_GAS_PRICE, "Forwarder: gas price too high");
-        // require(req.validUntil >= block.timestamp + MIN_DELAY, "Forwarder: min delay not met");
-        // require(req.validUntil <= block.timestamp + MAX_DELAY, "Forwarder: max delay exceeded");
-
-        bytes32 txHash = keccak256(abi.encode(req, signature));
-        require(!executedTxs[txHash], "Forwarder: transaction already executed");
-
-        bytes32 hash = keccak256(abi.encode(
-            FORWARD_REQUEST_TYPEHASH,
-            req.from,
-            req.to,
-            req.value,
-            req.gas,
-            req.nonce,
-            keccak256(req.data),
-            req.validUntil
-        ));
-
+    function verify(ForwardRequest calldata req, bytes calldata signature) public view returns (bool) {
         bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", domainSeparator, hash)
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR,
+                keccak256(abi.encode(
+                    FORWARD_REQUEST_TYPEHASH,
+                    req.from,
+                    req.to,
+                    req.value,
+                    req.gas,
+                    req.nonce,
+                    keccak256(req.data),
+                    req.validUntil
+                ))
+            )
         );
-
-        address signer = digest.recover(signature);
-        return signer == req.from;
+        return digest.recover(signature) == req.from;
     }
 
-    // Add a public function for verification with debug info
-    function verifyAndDebug(
-        ForwardRequest memory req,
-        bytes calldata signature
-    ) public returns (bool) {
-        bytes32 hash = keccak256(abi.encode(
-            FORWARD_REQUEST_TYPEHASH,
-            req.from,
-            req.to,
-            req.value,
-            req.gas,
-            req.nonce,
-            keccak256(req.data),
-            req.validUntil
-        ));
-
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", domainSeparator, hash)
-        );
-
-        address signer = digest.recover(signature);
-        
-        // Emit debug event here since it's not a view function
-        emit Debug(
-            "Verification",
-            signer,
-            req.from,
-            hash,
-            digest
-        );
-
-        return signer == req.from;
-    }
-
-    function forward(
-        ForwardRequest memory req,
-        bytes calldata signature
-    ) public payable nonReentrant whenNotPaused {
-        // Add rate limiting
-        require(block.timestamp - lastTxTimestamp[req.from] >= MIN_TIME_BETWEEN_TX, "Rate limit");
-
-        // Add replay protection
-        bytes32 sigHash = keccak256(abi.encodePacked(signature));
-        require(!executedSignatures[sigHash], "Signature already used");
-        executedSignatures[sigHash] = true;
-        lastTxTimestamp[req.from] = block.timestamp;
-
-        // Change to call verifyAndDebug for debugging
-        require(verifyAndDebug(req, signature), "Forwarder: signature does not match request");
-        require(req.nonce == nonces[req.from], "Forwarder: nonce mismatch");
-
-        bytes32 txHash = keccak256(abi.encode(req, signature));
-        executedTxs[txHash] = true;
+    function forward(ForwardRequest calldata req, bytes calldata signature) external returns (bool) {
+        require(req.validUntil > block.timestamp, "Request expired");
+        require(nonces[req.from] == req.nonce, "Invalid nonce");
+        require(verify(req, signature), "Invalid signature");
 
         nonces[req.from]++;
 
-        (bool success, ) = req.to.call{gas: req.gas, value: req.value}(req.data);
-        require(success, "Forwarder: call failed");
+        (bool success,) = req.to.call{gas: req.gas, value: req.value}(req.data);
+        require(success, "Forward failed");
 
-        emit TransactionForwarded(req.from, req.to, req.nonce, req.data);
+        emit TransactionForwarded(req.from, req.to, req.nonce);
+        return true;
     }
 
-    function blacklistAddress(address account) external onlyOwner {
-        blacklistedAddresses[account] = true;
-        emit AddressBlacklisted(account);
-    }
-
-    function setMaxGasLimit(uint256 newLimit) external onlyOwner {
-        maxGasLimit = newLimit;
-        emit MaxGasLimitUpdated(newLimit);
-    }
-
-    function pause() external onlyOwner {
-        _pause();
-    }
-
-    function unpause() external onlyOwner {
-        _unpause();
-    }
-
-    function emergencyWithdraw() external onlyOwner {
-        payable(owner()).transfer(address(this).balance);
-    }
-
-    function emergencyERC20Withdraw(address token) external onlyOwner {
-        IERC20(token).transfer(owner(), IERC20(token).balanceOf(address(this)));
-    }
-
-    // Add a function to get the next nonce
-    function getNonce(address account) external view returns (uint256) {
-        return nonces[account];
+    function getNonce(address from) external view returns (uint256) {
+        return nonces[from];
     }
 }

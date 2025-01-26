@@ -12,10 +12,9 @@ import { useEthereum } from "./hooks/useEthereum";
 import styled from "styled-components";
 
 const ERC20_ABI = [
-  // Add name and owner functions
   "function name() external view returns (string)",
   "function owner() external view returns (address)",
-  // Existing functions
+
   "function transfer(address recipient, uint256 amount) external returns (bool)",
   "function balanceOf(address account) external view returns (uint256)",
   "function symbol() external view returns (string)",
@@ -24,16 +23,14 @@ const ERC20_ABI = [
 ];
 
 const ERC721_ABI = [
-  // Add name and owner functions
   "function name() external view returns (string)",
   "function owner() external view returns (address)",
-  // Existing functions
+
   "function transferFrom(address from, address to, uint256 tokenId) external",
   "function ownerOf(uint256 tokenId) external view returns (address)",
   "function symbol() external view returns (string)",
 ];
 
-// Update FORWARDER_ABI to match the deployed contract exactly
 const FORWARDER_ABI = [
   {
     inputs: [{name: "account", type: "address"}],
@@ -58,7 +55,7 @@ const FORWARDER_ABI = [
   }
 ];
 
-// Add these constants at the top after imports
+
 const TEST_ACCOUNTS = [
   {
     address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
@@ -72,7 +69,7 @@ const TEST_ACCOUNTS = [
     address: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
     label: "Account #2"
   },
-  // Add more test accounts as needed
+
 ];
 
 const TEST_TOKEN_IDS = [
@@ -83,7 +80,6 @@ const TEST_AMOUNTS = [
   "1", "10", "100", "1000", "10000"
 ];
 
-// Add styled components for cyberpunk elements
 const CyberPanel = motion(styled.div`
   background: rgba(13, 14, 33, 0.7);
   backdrop-filter: blur(10px);
@@ -211,7 +207,6 @@ export default function RelayPage() {
     showAlert('error', friendlyMessage);
   };
 
-  // Add detailed logging to connectWallet
   const connectWallet = async () => {
     console.log("Attempting wallet connection...");
     setIsConnecting(true);
@@ -224,7 +219,6 @@ export default function RelayPage() {
         return;
       }
 
-      // Request account access
       const accounts = await window.ethereum.request({ 
         method: 'eth_requestAccounts' 
       });
@@ -233,9 +227,9 @@ export default function RelayPage() {
         setConnected(true);
         setUserAddress(accounts[0]);
         
-        // Also verify the connection with provider
+     
         if (provider) {
-          await provider.getSigner(); // This ensures we have proper connection
+          await provider.getSigner(); 
         }
       } else {
         setWalletError("No accounts found!");
@@ -277,7 +271,6 @@ export default function RelayPage() {
     }
   };
 
-  // Update the ethereum event handling
   useEffect(() => {
     console.log("Checking wallet connection...");
     checkWalletConnection();
@@ -309,7 +302,7 @@ export default function RelayPage() {
       ethereum.on('disconnect', handleDisconnect);
 
       return () => {
-        // Clean up listeners
+    
         if (ethereum.removeListener) {
           ethereum.removeListener('accountsChanged', handleAccountsChanged);
           ethereum.removeListener('chainChanged', handleChainChanged);
@@ -319,7 +312,7 @@ export default function RelayPage() {
     }
   }, []);
 
-  // Add logging to fetchTokenInfo
+
   const fetchTokenInfo = async () => {
     console.log("Fetching token info for:", tokenAddress);
     console.log("Token type:", tokenType);
@@ -332,7 +325,7 @@ export default function RelayPage() {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
 
-      // Check if contract exists first
+     
       const code = await provider.getCode(tokenAddress);
       if (code === '0x') {
         setTokenInfo({ symbol: "Not Found", decimals: 18 });
@@ -348,7 +341,7 @@ export default function RelayPage() {
       let symbol = "Unknown";
       let decimals = 18;
 
-      // Try multiple ways to get token info with fallbacks
+    
       try {
         try {
           symbol = await contract.symbol();
@@ -391,7 +384,7 @@ export default function RelayPage() {
     }
   }, [tokenAddress, tokenType]);
 
-  // Enhanced handleForwardTx logging
+  
   const handleForwardTx = async () => {
     console.log("Starting transaction with params:", {
       tokenType,
@@ -420,7 +413,7 @@ export default function RelayPage() {
       }
       
       const provider = new ethers.BrowserProvider(window.ethereum);
-      // Add logging before approval
+  
       console.log("Checking approval requirements...");
       if (tokenType === "ERC20") {
         console.log("Starting ERC20 approval process");
@@ -441,7 +434,7 @@ export default function RelayPage() {
       const chainId = (await provider.getNetwork()).chainId;
       const userAddr = await signer.getAddress();
 
-      // Validate inputs
+
       if (tokenType === "ERC20" && (!amount || isNaN(Number(amount)))) {
         setForwardStatus("Please enter a valid amount");
         return;
@@ -452,7 +445,6 @@ export default function RelayPage() {
         return;
       }
 
-      // Prepare data
       const abi = tokenType === "ERC20" ? ERC20_ABI : ERC721_ABI;
       const iface = new ethers.Interface(abi);
       
@@ -466,25 +458,23 @@ export default function RelayPage() {
 
       const validUntil = Math.floor(Date.now() / 1000) + 3600;
 
-      // Ensure verifyingContract is valid
       const verifyingContract = process.env.NEXT_PUBLIC_FORWARDER_ADDRESS;
       if (!verifyingContract || !ethers.isAddress(verifyingContract)) {
         throw new Error("Invalid forwarder address configuration");
       }
 
-      // Create forwarder contract instance with proper ABI
+     
       const forwarderContract = new ethers.Contract(
         verifyingContract,
         FORWARDER_ABI,
         provider
       );
 
-      // Get nonce with better error handling
+      
       let nonce;
       const getNonceWithFallback = async (contract: ethers.Contract, address: string) => {
         const errors: Error[] = [];
       
-        // Try nonces first
         try {
           console.log("Trying nonces() method...");
           const result = await contract.nonces.staticCall(address);
@@ -494,8 +484,6 @@ export default function RelayPage() {
           console.log("nonces() failed:", error);
           errors.push(error as Error);
         }
-      
-        // Try getNonce as fallback
         try {
           console.log("Trying getNonce() method...");
           const result = await contract.getNonce.staticCall(address);
@@ -505,8 +493,6 @@ export default function RelayPage() {
           console.log("getNonce() failed:", error);
           errors.push(error as Error);
         }
-      
-        // Try raw call as last resort
         try {
           console.log("Trying raw call...");
           const data = contract.interface.encodeFunctionData("getNonce", [address]);
@@ -529,7 +515,7 @@ export default function RelayPage() {
       try {
         const forwarderContract = new ethers.Contract(
           verifyingContract,
-          FORWARDER_ABI, // Use full ABI here
+          FORWARDER_ABI, 
           provider
         );
       
@@ -558,7 +544,6 @@ export default function RelayPage() {
         verifyingContract: verifyingContract
       };
 
-      // Remove EIP712Domain from types - it's handled internally
       const types = {
         ForwardRequest: [
           { name: "from", type: "address" },
@@ -570,8 +555,6 @@ export default function RelayPage() {
           { name: "validUntil", type: "uint256" }
         ]
       };
-
-      // Format message values as strings
       const messagevalues = {
         from: ethers.getAddress(userAddr),
         to: ethers.getAddress(tokenAddress),
@@ -581,8 +564,6 @@ export default function RelayPage() {
         data: data,
         validUntil: validUntil.toString()
       };
-
-      // Log transaction preparation
       console.log("Preparing transaction data:", {
         chainId: chainId.toString(),
         userAddress,
@@ -590,8 +571,6 @@ export default function RelayPage() {
         domain,
         types
       });
-
-      // Log signature request
       console.log("Requesting signature...");
       const signature = await signer.signTypedData(
         domain,
@@ -600,7 +579,7 @@ export default function RelayPage() {
       );
       console.log("Signature received:", signature);
 
-      // Log relay request
+
       console.log("Sending relay request to API...");
       const response = await fetch("/api/relay", {
         method: "POST",
@@ -628,7 +607,7 @@ export default function RelayPage() {
       });
       console.error("Transaction error:", error);
       
-      // Handle specific error cases
+
       if (error.message.includes('user rejected')) {
         showAlert('warning', 'Transaction was rejected by user');
       } else if (error.message.includes('insufficient funds')) {
@@ -644,8 +623,6 @@ export default function RelayPage() {
       setIsApproving(false);
     }
   };
-
-  // Add logging to approveForwarder
   const approveForwarder = async () => {
     console.log("Starting token approval process");
     console.log("Current state:", {
@@ -664,13 +641,13 @@ export default function RelayPage() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       
-      // Get and validate forwarder address
+     
       const forwarderAddress = process.env.NEXT_PUBLIC_FORWARDER_ADDRESS;
       if (!forwarderAddress || !ethers.isAddress(forwarderAddress)) {
         throw new Error("Invalid forwarder address");
       }
 
-      // Create contract instance
+
       const tokenContract = new ethers.Contract(
         ethers.getAddress(tokenAddress), // ensure checksummed address
         ERC20_ABI,
@@ -679,8 +656,7 @@ export default function RelayPage() {
 
       console.log("Approving forwarder:", forwarderAddress);
       console.log("Token address:", tokenAddress);
-      
-      // Call approve with proper formatting
+
       const tx = await tokenContract.approve(
         ethers.getAddress(forwarderAddress),
         ethers.MaxUint256,
@@ -694,8 +670,6 @@ export default function RelayPage() {
         tokenAddress,
         gasLimit: 300000
       });
-      
-      // Log approval status
       console.log("Approval transaction sent:", tx.hash);
       const receipt = await tx.wait();
       console.log("Approval confirmed:", receipt.transactionHash);
@@ -777,17 +751,15 @@ export default function RelayPage() {
     }
   };
 
-  // Add these state variables to the component
+ 
   const [useCustomAddress, setUseCustomAddress] = useState(false);
   const [useCustomAmount, setUseCustomAmount] = useState(false);
   const [selectedTestAccount, setSelectedTestAccount] = useState("");
   const [selectedTestAmount, setSelectedTestAmount] = useState("");
   const [selectedTokenId, setSelectedTokenId] = useState("");
 
-  // Add delay utility
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // Add retry utility
   async function retry<T>(
     fn: () => Promise<T>,
     retries = 3,
@@ -803,70 +775,117 @@ export default function RelayPage() {
       throw error;
     }
   }
-
-  // Update validateForwarderSetup function
+  const checkAndSwitchNetwork = async () => {
+    if (!window.ethereum) return false;
+    
+    try {
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      if (chainId !== '0x539') { // 1337 in hex
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x539' }],
+        });
+      }
+      return true;
+    } catch (error: any) {
+      if (error.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: '0x539',
+                chainName: 'Hardhat Local',
+                nativeCurrency: {
+                  name: 'ETH',
+                  symbol: 'ETH',
+                  decimals: 18
+                },
+                rpcUrls: ['http://127.0.0.1:8545']
+              },
+            ],
+          });
+          return true;
+        } catch (addError) {
+          console.error('Error adding chain:', addError);
+          return false;
+        }
+      }
+      console.error('Error switching chain:', error);
+      return false;
+    }
+  };
+  
   const validateForwarderSetup = async () => {
     try {
       if (!window?.ethereum) {
         throw new Error("MetaMask not found");
       }
       
+      // Add network check
+      const networkValid = await checkAndSwitchNetwork();
+      if (!networkValid) {
+        throw new Error("Please connect to Hardhat Local network");
+      }
+      
       const provider = new ethers.BrowserProvider(window.ethereum);
       const verifyingContract = process.env.NEXT_PUBLIC_FORWARDER_ADDRESS;
       
-      if (!verifyingContract || !ethers.isAddress(verifyingContract)) {
-        throw new Error("Invalid forwarder address");
+      console.log("Checking forwarder address:", verifyingContract);
+      
+      if (!verifyingContract) {
+        throw new Error("Forwarder address not configured");
       }
-
-      console.log("Validating forwarder contract:", verifyingContract);
-
-      // First check if contract exists
-      const code = await provider.getCode(verifyingContract);
-      if (code === '0x') {
-        console.log("No contract code found, waiting and retrying...");
-        await delay(2000); // Wait 2 seconds
-        const retryCode = await provider.getCode(verifyingContract);
-        if (retryCode === '0x') {
-          throw new Error('Contract not deployed at this address');
+  
+      // Add 0x prefix if missing
+      const formattedAddress = verifyingContract.startsWith('0x') 
+        ? verifyingContract 
+        : `0x${verifyingContract}`;
+  
+      if (!ethers.isAddress(formattedAddress)) {
+        throw new Error(`Invalid address format: ${formattedAddress}`);
+      }
+  
+      console.log("Validating forwarder contract:", formattedAddress);
+  
+      // Check contract deployment with retries
+      for (let i = 0; i < 3; i++) {
+        const code = await provider.getCode(formattedAddress);
+        if (code !== '0x') {
+          console.log("Contract code found, length:", code.length);
+          break;
+        }
+        console.log(`Attempt ${i + 1}: No contract code found, waiting...`);
+        await delay(2000);
+        if (i === 2) {
+          throw new Error('Contract not deployed after retries');
         }
       }
-
-      // Create contract instance with minimal ABI
+  
+      // Create contract instance
       const forwarderContract = new ethers.Contract(
-        verifyingContract,
+        formattedAddress,
         ["function getNonce(address) view returns (uint256)"],
         provider
       );
-
-      // Test contract call with retries
+  
+      // Test contract call
       const testAddress = ethers.ZeroAddress;
-      let lastError;
-
-      for (let i = 0; i < 3; i++) {
-        try {
-          console.log(`Attempt ${i + 1}: Testing getNonce with address:`, testAddress);
-          const result = await forwarderContract.getNonce.staticCall(testAddress);
-          console.log("Got nonce:", result.toString());
-          return true;
-        } catch (error: any) {
-          console.log(`Attempt ${i + 1} failed:`, error.message);
-          lastError = error;
-          if (i < 2) await delay(1000); // Wait between retries
-        }
-      }
-
-      throw lastError || new Error('Contract validation failed');
+      const result = await forwarderContract.getNonce.staticCall(testAddress);
+      console.log("Contract test successful, nonce:", result.toString());
+  
+      return true;
     } catch (error: any) {
-      console.error("Forwarder setup validation failed:", error);
+      console.error("Forwarder validation failed:", error);
       showAlert('error', `Contract validation failed: ${error.message}`);
       return false;
     }
   };
-
-  // Add useEffect to validate forwarder setup on mount
+  
+  
   useEffect(() => {
     if (connected && window.ethereum) {
-      // Add slight delay to ensure contract is deployed
+    
       setTimeout(() => {
         validateForwarderSetup();
       }, 2000);
@@ -1165,8 +1184,6 @@ export default function RelayPage() {
             </motion.div>
           )}
         </CyberPanel>
-
-        {/* Network Status Indicator */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
