@@ -149,7 +149,7 @@ npx hardhat test
 # Run local node
 npx hardhat node
 
-# Deploy to local network
+# use different terminal for Deploy to local network
 npx hardhat run scripts/deploy.ts --network localhost
 ```
 
