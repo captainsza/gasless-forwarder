@@ -453,22 +453,6 @@ export default function RelayPage() {
         const value = ethers.parseUnits(amount, tokenInfo.decimals || 18).toString();
         data = iface.encodeFunctionData("transfer", [to, value]);
       } else {
-        const tokenContract = new ethers.Contract(
-          tokenAddress,
-          ERC721_ABI,
-          provider
-        );
-
-        const owner = await tokenContract.ownerOf(tokenId);
-        if (owner.toLowerCase() !== userAddress.toLowerCase()) {
-          throw new Error(`You don't own token #${tokenId}`);
-        }
-
-        const approved = await approveForwarder();
-        if (!approved) {
-          throw new Error("NFT approval required");
-        }
-
         data = iface.encodeFunctionData("transferFrom", [userAddress, to, tokenId]);
       }
 
@@ -641,65 +625,68 @@ export default function RelayPage() {
   };
   const approveForwarder = async () => {
     console.log("Starting token approval process");
-    
+    console.log("Current state:", {
+      tokenAddress,
+      connected,
+      hasMetaMask: !!window.ethereum
+    });
+
     if (!window.ethereum || !connected || !tokenAddress) return false;
+
     try {
+      if (!window?.ethereum) {
+        throw new Error("MetaMask not found");
+      }
+      
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const forwarderAddress = process.env.NEXT_PUBLIC_FORWARDER_ADDRESS;
       
+     
+      const forwarderAddress = process.env.NEXT_PUBLIC_FORWARDER_ADDRESS;
       if (!forwarderAddress || !ethers.isAddress(forwarderAddress)) {
         throw new Error("Invalid forwarder address");
       }
-  
-      if (tokenType === "ERC20") {
-        const tokenContract = new ethers.Contract(
-          ethers.getAddress(tokenAddress),
-          ERC20_ABI,
-          signer
-        );
-        const tx = await tokenContract.approve(
-          forwarderAddress,
-          ethers.MaxUint256,
-          { gasLimit: 300000 }
-        );
-        await tx.wait();
-      } else {
-        // ERC721 approval
-        const tokenContract = new ethers.Contract(
-          ethers.getAddress(tokenAddress),
-          [
-            ...ERC721_ABI,
-            "function setApprovalForAll(address operator, bool approved) external"
-          ],
-          signer
-        );
-        
-        // Check if already approved
-        const isApproved = await tokenContract.isApprovedForAll(
-          await signer.getAddress(),
-          forwarderAddress
-        );
-        
-        if (!isApproved) {
-          const tx = await tokenContract.setApprovalForAll(
-            forwarderAddress,
-            true,
-            { gasLimit: 300000 }
-          );
-          await tx.wait();
+
+
+      const tokenContract = new ethers.Contract(
+        ethers.getAddress(tokenAddress), // ensure checksummed address
+        ERC20_ABI,
+        signer
+      );
+
+      console.log("Approving forwarder:", forwarderAddress);
+      console.log("Token address:", tokenAddress);
+
+      const tx = await tokenContract.approve(
+        ethers.getAddress(forwarderAddress),
+        ethers.MaxUint256,
+        {
+          gasLimit: 300000
         }
-      }
-      
+      );
+
+      console.log("Approval transaction details:", {
+        forwarderAddress,
+        tokenAddress,
+        gasLimit: 300000
+      });
+      console.log("Approval transaction sent:", tx.hash);
+      const receipt = await tx.wait();
+      console.log("Approval confirmed:", receipt.transactionHash);
+
       showAlert('success', 'Token approval successful');
       return true;
     } catch (error: any) {
-      console.error("Approval error:", error);
-      showAlert('error', `Approval failed: ${error.message}`);
+      console.error("Approval error details:", {
+        message: error.message,
+        code: error.code,
+        data: error.data
+      });
+      handleError(error);
       return false;
     }
   };
-  
+
   const importTestToken = async () => {
     console.log("Starting token import process...");
     
