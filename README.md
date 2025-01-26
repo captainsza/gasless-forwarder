@@ -2,7 +2,7 @@
 
 A futuristic web3 application that enables users to perform gasless token transfers for both ERC20 and ERC721 tokens. This project implements meta-transactions using a forwarder contract pattern.
 
-![Gasless Transaction Portal Demo](docs/demo.gif)
+![Gasless Transaction Portal Demo](docs/demo.gif) [Gasless Transaction Portal Image](docs/img.png)
 
 ## 🚀 Features
 

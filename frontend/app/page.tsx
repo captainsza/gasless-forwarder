@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -8,8 +9,13 @@ import LoadingSpinner from "./components/LoadingSpinner";
 import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
 import CyberAlert from "./components/CyberAlert";
 import { useEthereum } from "./hooks/useEthereum";
+import styled from "styled-components";
 
 const ERC20_ABI = [
+  // Add name and owner functions
+  "function name() external view returns (string)",
+  "function owner() external view returns (address)",
+  // Existing functions
   "function transfer(address recipient, uint256 amount) external returns (bool)",
   "function balanceOf(address account) external view returns (uint256)",
   "function symbol() external view returns (string)",
@@ -18,10 +24,149 @@ const ERC20_ABI = [
 ];
 
 const ERC721_ABI = [
+  // Add name and owner functions
+  "function name() external view returns (string)",
+  "function owner() external view returns (address)",
+  // Existing functions
   "function transferFrom(address from, address to, uint256 tokenId) external",
   "function ownerOf(uint256 tokenId) external view returns (address)",
   "function symbol() external view returns (string)",
 ];
+
+// Update FORWARDER_ABI to match the deployed contract exactly
+const FORWARDER_ABI = [
+  {
+    inputs: [{name: "account", type: "address"}],
+    name: "getNonce",
+    outputs: [{name: "", type: "uint256"}],
+    stateMutability: "view",
+    type: "function"
+  },
+  {
+    inputs: [{name: "", type: "address"}],
+    name: "nonces",
+    outputs: [{name: "", type: "uint256"}],
+    stateMutability: "view",
+    type: "function"
+  },
+  {
+    inputs: [],
+    name: "domainSeparator",
+    outputs: [{name: "", type: "bytes32"}],
+    stateMutability: "view",
+    type: "function"
+  }
+];
+
+// Add these constants at the top after imports
+const TEST_ACCOUNTS = [
+  {
+    address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    label: "Account #0 (Deployer)"
+  },
+  {
+    address: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    label: "Account #1"
+  },
+  {
+    address: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    label: "Account #2"
+  },
+  // Add more test accounts as needed
+];
+
+const TEST_TOKEN_IDS = [
+  "1", "2", "3", "4", "5", "10", "100"
+];
+
+const TEST_AMOUNTS = [
+  "1", "10", "100", "1000", "10000"
+];
+
+// Add styled components for cyberpunk elements
+const CyberPanel = motion(styled.div`
+  background: rgba(13, 14, 33, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(66, 211, 255, 0.2);
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(66, 211, 255, 0.1);
+  transition: all 0.3s ease;
+  
+  &:hover {
+    border-color: rgba(66, 211, 255, 0.4);
+    box-shadow: 0 0 30px rgba(66, 211, 255, 0.2);
+  }
+`);
+
+const CyberInput = styled.input`
+  background: rgba(13, 14, 33, 0.6);
+  border: 1px solid rgba(66, 211, 255, 0.3);
+  border-radius: 0.5rem;
+  color: #fff;
+  padding: 0.75rem 1rem;
+  width: 100%;
+  transition: all 0.3s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: rgba(66, 211, 255, 0.8);
+    box-shadow: 0 0 15px rgba(66, 211, 255, 0.3);
+  }
+`;
+
+const CyberSelect = styled.select`
+  background: rgba(13, 14, 33, 0.6);
+  border: 1px solid rgba(66, 211, 255, 0.3);
+  border-radius: 0.5rem;
+  color: #fff;
+  padding: 0.75rem 1rem;
+  width: 100%;
+  transition: all 0.3s ease;
+  
+  &:focus {
+    outline: none;
+    border-color: rgba(66, 211, 255, 0.8);
+    box-shadow: 0 0 15px rgba(66, 211, 255, 0.3);
+  }
+`;
+
+const CyberButton = motion(styled.button`
+  background: linear-gradient(45deg, #2b5876, #4e4376);
+  border: none;
+  border-radius: 0.5rem;
+  color: #fff;
+  padding: 1rem 2rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.2),
+      transparent
+    );
+    transition: 0.5s;
+  }
+
+  &:hover::before {
+    left: 100%;
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+`);
 
 export default function RelayPage() {
   const [tokenType, setTokenType] = useState<"ERC20" | "ERC721">("ERC20");
@@ -66,11 +211,14 @@ export default function RelayPage() {
     showAlert('error', friendlyMessage);
   };
 
+  // Add detailed logging to connectWallet
   const connectWallet = async () => {
+    console.log("Attempting wallet connection...");
     setIsConnecting(true);
     setWalletError("");
 
     try {
+      console.log("Checking if MetaMask exists:", !!window?.ethereum);
       if (!window?.ethereum) {
         setWalletError("MetaMask is not installed!");
         return;
@@ -92,7 +240,15 @@ export default function RelayPage() {
       } else {
         setWalletError("No accounts found!");
       }
+      console.log("Connected account:", accounts[0]);
+      console.log("Connection status:", connected);
+      console.log("Provider status:", !!provider);
     } catch (error: any) {
+      console.error("Connection error details:", {
+        message: error.message,
+        code: error.code,
+        data: error.data
+      });
       console.error("Connection error:", error);
       setWalletError(error.message || "Failed to connect wallet");
     } finally {
@@ -121,12 +277,14 @@ export default function RelayPage() {
     }
   };
 
+  // Update the ethereum event handling
   useEffect(() => {
     console.log("Checking wallet connection...");
     checkWalletConnection();
 
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', (accounts: string[]) => {
+    const { ethereum } = window;
+    if (ethereum) {
+      const handleAccountsChanged = (accounts: string[]) => {
         console.log("Accounts changed:", accounts);
         if (accounts.length > 0) {
           setConnected(true);
@@ -135,72 +293,95 @@ export default function RelayPage() {
           setConnected(false);
           setUserAddress("");
         }
-      });
+      };
 
-      // Handle chain changes
-      window.ethereum.on('chainChanged', () => {
+      const handleChainChanged = () => {
         window.location.reload();
-      });
+      };
 
-      // Handle disconnect
-      window.ethereum.on('disconnect', () => {
+      const handleDisconnect = () => {
         setConnected(false);
         setUserAddress("");
-      });
-    }
+      };
 
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeAllListeners();
-      }
-    };
+      ethereum.on('accountsChanged', handleAccountsChanged);
+      ethereum.on('chainChanged', handleChainChanged);
+      ethereum.on('disconnect', handleDisconnect);
+
+      return () => {
+        // Clean up listeners
+        if (ethereum.removeListener) {
+          ethereum.removeListener('accountsChanged', handleAccountsChanged);
+          ethereum.removeListener('chainChanged', handleChainChanged);
+          ethereum.removeListener('disconnect', handleDisconnect);
+        }
+      };
+    }
   }, []);
 
+  // Add logging to fetchTokenInfo
   const fetchTokenInfo = async () => {
-    if (!tokenAddress || !window.ethereum) return;
+    console.log("Fetching token info for:", tokenAddress);
+    console.log("Token type:", tokenType);
+    
+    if (!tokenAddress || !window.ethereum) {
+      console.log("Missing requirements:", { tokenAddress, ethereum: !!window.ethereum });
+      return;
+    }
 
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const abi = tokenType === "ERC20" ? ERC20_ABI : ERC721_ABI;
 
-      if (!ethers.isAddress(tokenAddress)) {
-        setTokenInfo({ symbol: "Invalid Address", decimals: 18 });
+      // Check if contract exists first
+      const code = await provider.getCode(tokenAddress);
+      if (code === '0x') {
+        setTokenInfo({ symbol: "Not Found", decimals: 18 });
         return;
       }
 
-      const contract = new ethers.Contract(tokenAddress, abi, provider);
+      const contract = new ethers.Contract(
+        tokenAddress, 
+        tokenType === "ERC20" ? ERC20_ABI : ERC721_ABI, 
+        provider
+      );
 
+      let symbol = "Unknown";
+      let decimals = 18;
+
+      // Try multiple ways to get token info with fallbacks
       try {
-        // Handle symbol first
-        let symbol = "Unknown";
         try {
-          const symbolResult = await contract.symbol();
-          if (symbolResult) symbol = symbolResult;
-        } catch (error) {
-          console.warn("Error getting symbol:", error);
+          symbol = await contract.symbol();
+        } catch {
+          try {
+            symbol = await contract.name();
+          } catch {
+            symbol = tokenType === "ERC20" ? "Unknown Token" : "Unknown NFT";
+          }
         }
 
-        // Handle decimals
-        let decimals = 18;
         if (tokenType === "ERC20") {
           try {
-            const decimalsResult = await contract.decimals();
-            if (decimalsResult !== undefined) {
-              decimals = Number(decimalsResult);
-            }
-          } catch (error) {
-            console.warn("Error getting decimals:", error);
+            decimals = await contract.decimals();
+          } catch {
+            console.warn("Using default decimals: 18");
           }
         }
 
         setTokenInfo({ symbol, decimals });
       } catch (error) {
-        console.error("Contract call error:", error);
-        setTokenInfo({ symbol: "Error", decimals: 18 });
+        console.warn("Token info retrieval failed:", error);
+        setTokenInfo({ 
+          symbol: tokenType === "ERC20" ? "Unknown Token" : "Unknown NFT", 
+          decimals: 18 
+        });
       }
     } catch (error) {
       console.error("Provider error:", error);
-      setTokenInfo({ symbol: "Error", decimals: 18 });
+      setTokenInfo({ 
+        symbol: "Error", 
+        decimals: 18 
+      });
     }
   };
 
@@ -210,7 +391,16 @@ export default function RelayPage() {
     }
   }, [tokenAddress, tokenType]);
 
+  // Enhanced handleForwardTx logging
   const handleForwardTx = async () => {
+    console.log("Starting transaction with params:", {
+      tokenType,
+      tokenAddress,
+      to,
+      amount,
+      tokenId
+    });
+
     if (!window.ethereum || !connected) {
       setForwardStatus("Please connect your wallet first");
       return;
@@ -225,8 +415,15 @@ export default function RelayPage() {
     setIsSuccess(false);
 
     try {
-      // For ERC20 tokens, check and handle approval first
+      if (!window?.ethereum) {
+        throw new Error("MetaMask not found");
+      }
+      
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      // Add logging before approval
+      console.log("Checking approval requirements...");
       if (tokenType === "ERC20") {
+        console.log("Starting ERC20 approval process");
         setIsApproving(true);
         try {
           const approved = await approveForwarder();
@@ -240,7 +437,6 @@ export default function RelayPage() {
         }
       }
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const chainId = (await provider.getNetwork()).chainId;
       const userAddr = await signer.getAddress();
@@ -276,21 +472,81 @@ export default function RelayPage() {
         throw new Error("Invalid forwarder address configuration");
       }
 
+      // Create forwarder contract instance with proper ABI
       const forwarderContract = new ethers.Contract(
         verifyingContract,
-        [
-          "function getNonce(address account) external view returns (uint256)"
-        ],
+        FORWARDER_ABI,
         provider
       );
-      const nextNonce = await forwarderContract.getNonce(userAddr);
+
+      // Get nonce with better error handling
+      let nonce;
+      const getNonceWithFallback = async (contract: ethers.Contract, address: string) => {
+        const errors: Error[] = [];
+      
+        // Try nonces first
+        try {
+          console.log("Trying nonces() method...");
+          const result = await contract.nonces.staticCall(address);
+          console.log("Got nonce from nonces():", result.toString());
+          return result;
+        } catch (error) {
+          console.log("nonces() failed:", error);
+          errors.push(error as Error);
+        }
+      
+        // Try getNonce as fallback
+        try {
+          console.log("Trying getNonce() method...");
+          const result = await contract.getNonce.staticCall(address);
+          console.log("Got nonce from getNonce():", result.toString());
+          return result;
+        } catch (error) {
+          console.log("getNonce() failed:", error);
+          errors.push(error as Error);
+        }
+      
+        // Try raw call as last resort
+        try {
+          console.log("Trying raw call...");
+          const data = contract.interface.encodeFunctionData("getNonce", [address]);
+          const result = await contract.provider.call({
+            to: contract.target,
+            data
+          });
+          const decoded = ethers.AbiCoder.defaultAbiCoder().decode(['uint256'], result);
+          console.log("Got nonce from raw call:", decoded[0].toString());
+          return decoded[0];
+        } catch (error) {
+          console.log("Raw call failed:", error);
+          errors.push(error as Error);
+        }
+      
+        console.error("All nonce retrieval methods failed:", errors);
+        throw new Error(`All nonce retrieval methods failed. Last error: ${errors[errors.length - 1]?.message}`);
+      };
+      
+      try {
+        const forwarderContract = new ethers.Contract(
+          verifyingContract,
+          FORWARDER_ABI, // Use full ABI here
+          provider
+        );
+      
+        console.log("Getting nonce for address:", userAddr);
+        nonce = await getNonceWithFallback(forwarderContract, userAddr);
+        console.log("Got nonce:", nonce.toString());
+      } catch (error: any) {
+        console.error("Nonce retrieval error:", error);
+        throw new Error(`Failed to get nonce: ${error.message}`);
+      }
 
       const message = {
         from: userAddr,
         to: tokenAddress,
         value: "0",
         gas: "200000",
-        nonce: nextNonce.toString(),
+        nonce: nonce.toString(),
         data: data,
         validUntil: validUntil.toString()
       };
@@ -321,31 +577,40 @@ export default function RelayPage() {
         to: ethers.getAddress(tokenAddress),
         value: "0",
         gas: "200000",
-        nonce: nextNonce.toString(),
+        nonce: nonce.toString(),
         data: data,
         validUntil: validUntil.toString()
       };
 
-      console.log("Signing message:", {
+      // Log transaction preparation
+      console.log("Preparing transaction data:", {
+        chainId: chainId.toString(),
+        userAddress,
+        message,
         domain,
-        types,
-        messagevalues
+        types
       });
 
-      // Sign the message with proper types
+      // Log signature request
+      console.log("Requesting signature...");
       const signature = await signer.signTypedData(
         domain,
         { ForwardRequest: types.ForwardRequest },
         message
       );
+      console.log("Signature received:", signature);
 
+      // Log relay request
+      console.log("Sending relay request to API...");
       const response = await fetch("/api/relay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message, signature }),
       });
 
+      console.log("API response status:", response.status);
       const result = await response.json();
+      console.log("API response data:", result);
 
       if (!response.ok) {
         throw new Error(result.error || 'Transaction failed');
@@ -355,6 +620,12 @@ export default function RelayPage() {
       setForwardStatus(`Transaction sent! Hash: ${result.txHash}`);
       setIsSuccess(true);
     } catch (error: any) {
+      console.error("Transaction error details:", {
+        message: error.message,
+        code: error.code,
+        data: error.data,
+        stack: error.stack
+      });
       console.error("Transaction error:", error);
       
       // Handle specific error cases
@@ -374,10 +645,22 @@ export default function RelayPage() {
     }
   };
 
+  // Add logging to approveForwarder
   const approveForwarder = async () => {
+    console.log("Starting token approval process");
+    console.log("Current state:", {
+      tokenAddress,
+      connected,
+      hasMetaMask: !!window.ethereum
+    });
+
     if (!window.ethereum || !connected || !tokenAddress) return false;
 
     try {
+      if (!window?.ethereum) {
+        throw new Error("MetaMask not found");
+      }
+      
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       
@@ -406,13 +689,25 @@ export default function RelayPage() {
         }
       );
 
-      console.log("Approval tx sent:", tx.hash);
+      console.log("Approval transaction details:", {
+        forwarderAddress,
+        tokenAddress,
+        gasLimit: 300000
+      });
+      
+      // Log approval status
+      console.log("Approval transaction sent:", tx.hash);
       const receipt = await tx.wait();
       console.log("Approval confirmed:", receipt.transactionHash);
 
       showAlert('success', 'Token approval successful');
       return true;
     } catch (error: any) {
+      console.error("Approval error details:", {
+        message: error.message,
+        code: error.code,
+        data: error.data
+      });
       handleError(error);
       return false;
     }
@@ -441,44 +736,202 @@ export default function RelayPage() {
     }
   };
 
+  // Add these state variables to the component
+  const [useCustomAddress, setUseCustomAddress] = useState(false);
+  const [useCustomAmount, setUseCustomAmount] = useState(false);
+  const [selectedTestAccount, setSelectedTestAccount] = useState("");
+  const [selectedTestAmount, setSelectedTestAmount] = useState("");
+  const [selectedTokenId, setSelectedTokenId] = useState("");
+
+  // Add delay utility
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Add retry utility
+  async function retry<T>(
+    fn: () => Promise<T>,
+    retries = 3,
+    delayMs = 1000
+  ): Promise<T> {
+    try {
+      return await fn();
+    } catch (error) {
+      if (retries > 0) {
+        await delay(delayMs);
+        return retry(fn, retries - 1, delayMs);
+      }
+      throw error;
+    }
+  }
+
+  // Update validateForwarderSetup function
+  const validateForwarderSetup = async () => {
+    try {
+      if (!window?.ethereum) {
+        throw new Error("MetaMask not found");
+      }
+      
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const verifyingContract = process.env.NEXT_PUBLIC_FORWARDER_ADDRESS;
+      
+      if (!verifyingContract || !ethers.isAddress(verifyingContract)) {
+        throw new Error("Invalid forwarder address");
+      }
+
+      console.log("Validating forwarder contract:", verifyingContract);
+
+      // First check if contract exists
+      const code = await provider.getCode(verifyingContract);
+      if (code === '0x') {
+        console.log("No contract code found, waiting and retrying...");
+        await delay(2000); // Wait 2 seconds
+        const retryCode = await provider.getCode(verifyingContract);
+        if (retryCode === '0x') {
+          throw new Error('Contract not deployed at this address');
+        }
+      }
+
+      // Create contract instance with minimal ABI
+      const forwarderContract = new ethers.Contract(
+        verifyingContract,
+        ["function getNonce(address) view returns (uint256)"],
+        provider
+      );
+
+      // Test contract call with retries
+      const testAddress = ethers.ZeroAddress;
+      let lastError;
+
+      for (let i = 0; i < 3; i++) {
+        try {
+          console.log(`Attempt ${i + 1}: Testing getNonce with address:`, testAddress);
+          const result = await forwarderContract.getNonce.staticCall(testAddress);
+          console.log("Got nonce:", result.toString());
+          return true;
+        } catch (error: any) {
+          console.log(`Attempt ${i + 1} failed:`, error.message);
+          lastError = error;
+          if (i < 2) await delay(1000); // Wait between retries
+        }
+      }
+
+      throw lastError || new Error('Contract validation failed');
+    } catch (error: any) {
+      console.error("Forwarder setup validation failed:", error);
+      showAlert('error', `Contract validation failed: ${error.message}`);
+      return false;
+    }
+  };
+
+  // Add useEffect to validate forwarder setup on mount
+  useEffect(() => {
+    if (connected && window.ethereum) {
+      // Add slight delay to ensure contract is deployed
+      setTimeout(() => {
+        validateForwarderSetup();
+      }, 2000);
+    }
+  }, [connected]);
+
+  // Add animation variants
+  const containerVariants = {
+    hidden: { opacity: 0, scale: 0.95 },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      transition: {
+        duration: 0.4,
+        ease: "easeOut"
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.3
+      }
+    }
+  };
+
+  // Add new state variables
+  const [transactionHistory, setTransactionHistory] = useState<any[]>([]);
+  const [gasEstimate, setGasEstimate] = useState<string>("");
+
+  // Add gas estimation function
+  const estimateGas = async () => {
+    // ...implementation...
+  };
+
+  // Add transaction history display
+  const TransactionHistory = () => (
+    <motion.div className="mt-8 space-y-4">
+      <h2 className="text-xl font-bold text-cyan-400">Transaction History</h2>
+      {/* Transaction list */}
+    </motion.div>
+  );
+
+  // Add gas savings display
+  const GasSavings = () => (
+    <motion.div className="mt-4 p-4 border border-cyan-400/20 rounded-lg">
+      <h3 className="text-lg font-bold text-cyan-400">Gas Savings</h3>
+      {/* Gas savings stats */}
+    </motion.div>
+  );
+
   return (
-    <div className="min-h-screen bg-cyber-dark text-white">
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white px-4 py-8">
       <CyberAlert
         type={alert.type}
         message={alert.message}
         isOpen={alert.isOpen}
         onClose={() => setAlert(prev => ({ ...prev, isOpen: false }))}
       />
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-4xl mx-auto p-6"
+
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="max-w-4xl mx-auto"
       >
-        <div className="glass-card bg-opacity-10 backdrop-blur-lg rounded-xl p-8 border border-cyber-blue/30">
-          <h1 className="text-4xl font-bold text-center mb-8 bg-gradient-to-r from-cyber-blue via-cyber-pink to-cyber-purple bg-clip-text text-transparent animate-gradient">
+        <CyberPanel className="p-8">
+          <motion.h1
+            className="text-4xl md:text-5xl font-bold text-center mb-12
+                       bg-clip-text text-transparent bg-gradient-to-r
+                       from-cyan-400 via-blue-500 to-purple-600"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
             Gasless Transaction Portal
-          </h1>
+            <div className="text-sm font-normal text-cyan-400 mt-2">
+              by Zaid Ahmad
+            </div>
+          </motion.h1>
 
           {!connected ? (
-            <div className="space-y-4">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+            <motion.div
+              variants={itemVariants}
+              className="space-y-6"
+            >
+              <CyberButton
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={connectWallet}
                 disabled={isConnecting}
-                className={`w-full py-3 px-6 bg-gradient-to-r from-cyber-blue to-cyber-purple rounded-lg text-white font-bold shadow-neon hover:shadow-neon-lg transition-all duration-300 ${
-                  isConnecting ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                className="w-full"
               >
                 {isConnecting ? (
                   <div className="flex items-center justify-center">
                     <LoadingSpinner />
-                    <span className="ml-2">Connecting...</span>
+                    <span className="ml-2">Connecting Wallet...</span>
                   </div>
                 ) : (
                   "Connect Wallet"
                 )}
-              </motion.button>
+              </CyberButton>
 
               {walletError && (
                 <motion.div
@@ -495,42 +948,39 @@ export default function RelayPage() {
                   href="https://metamask.io/download/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block text-center text-cyber-blue hover:text-cyber-pink transition-colors duration-300"
+                  className="block text-center text-cyan-400 hover:text-cyan-300 transition-colors duration-300"
                 >
                   Install MetaMask
                 </a>
               )}
-            </div>
+            </motion.div>
           ) : (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-6"
+              variants={itemVariants}
+              className="space-y-8"
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text text-cyber-blue">Token Type</span>
+                <div className="space-y-2">
+                  <label className="text-cyan-400 text-sm font-semibold">
+                    Token Type
                   </label>
-                  <select
+                  <CyberSelect
                     value={tokenType}
-                    onChange={(e) => setTokenType(e.target.value as "ERC20" | "ERC721")}
-                    className="select select-bordered w-full bg-cyber-dark border-cyber-blue/30"
+                    onChange={(e: { target: { value: string; }; }) => setTokenType(e.target.value as "ERC20" | "ERC721")}
                   >
-                    <option value="ERC20">ERC20</option>
-                    <option value="ERC721">ERC721</option>
-                  </select>
+                    <option value="ERC20">ERC20 Token</option>
+                    <option value="ERC721">ERC721 NFT</option>
+                  </CyberSelect>
                 </div>
 
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text text-cyber-blue">Token Address</span>
+                <div className="space-y-2">
+                  <label className="text-cyan-400 text-sm font-semibold">
+                    Token Address
                   </label>
-                  <input
+                  <CyberInput
                     type="text"
                     value={tokenAddress}
-                    onChange={(e) => setTokenAddress(e.target.value)}
-                    className="input input-bordered w-full bg-cyber-dark border-cyber-blue/30"
+                    onChange={(e: { target: { value: React.SetStateAction<string>; }; }) => setTokenAddress(e.target.value)}
                     placeholder="0x..."
                   />
                 </div>
@@ -540,13 +990,33 @@ export default function RelayPage() {
                 <label className="label">
                   <span className="label-text text-cyber-blue">Recipient Address</span>
                 </label>
-                <input
-                  type="text"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  className="input input-bordered w-full bg-cyber-dark border-cyber-blue/30"
-                  placeholder="0x..."
-                />
+                <select
+                  value={selectedTestAccount}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSelectedTestAccount(value);
+                    setTo(value);
+                    setUseCustomAddress(value === "custom");
+                  }}
+                  className="select select-bordered w-full bg-cyber-dark border-cyber-blue/30"
+                >
+                  <option value="">Select a test account</option>
+                  {TEST_ACCOUNTS.map((account) => (
+                    <option key={account.address} value={account.address}>
+                      {account.label}
+                    </option>
+                  ))}
+                  <option value="custom">Custom Address</option>
+                </select>
+                {useCustomAddress && (
+                  <input
+                    type="text"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                    className="input input-bordered w-full bg-cyber-dark border-cyber-blue/30 mt-2"
+                    placeholder="0x..."
+                  />
+                )}
               </div>
 
               {tokenType === "ERC20" ? (
@@ -554,13 +1024,33 @@ export default function RelayPage() {
                   <label className="label">
                     <span className="label-text text-cyber-blue">Amount</span>
                   </label>
-                  <input
-                    type="text"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="input input-bordered w-full bg-cyber-dark border-cyber-blue/30"
-                    placeholder="0.0"
-                  />
+                  <select
+                    value={selectedTestAmount}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSelectedTestAmount(value);
+                      setAmount(value);
+                      setUseCustomAmount(value === "custom");
+                    }}
+                    className="select select-bordered w-full bg-cyber-dark border-cyber-blue/30"
+                  >
+                    <option value="">Select a test amount</option>
+                    {TEST_AMOUNTS.map((amount) => (
+                      <option key={amount} value={amount}>
+                        {amount}
+                      </option>
+                    ))}
+                    <option value="custom">Custom Amount</option>
+                  </select>
+                  {useCustomAmount && (
+                    <input
+                      type="text"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="input input-bordered w-full bg-cyber-dark border-cyber-blue/30 mt-2"
+                      placeholder="0.0"
+                    />
+                  )}
                   {tokenInfo.symbol && <span className="text-sm text-gray-500">Token: {tokenInfo.symbol}</span>}
                 </div>
               ) : (
@@ -568,31 +1058,43 @@ export default function RelayPage() {
                   <label className="label">
                     <span className="label-text text-cyber-blue">Token ID</span>
                   </label>
+                  <select
+                    value={selectedTokenId}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSelectedTokenId(value);
+                      setTokenId(value);
+                    }}
+                    className="select select-bordered w-full bg-cyber-dark border-cyber-blue/30"
+                  >
+                    <option value="">Select a test token ID</option>
+                    {TEST_TOKEN_IDS.map((id) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="text"
                     value={tokenId}
                     onChange={(e) => setTokenId(e.target.value)}
-                    className="input input-bordered w-full bg-cyber-dark border-cyber-blue/30"
+                    className="input input-bordered w-full bg-cyber-dark border-cyber-blue/30 mt-2"
                     placeholder="Token ID"
                   />
                 </div>
               )}
 
-              <motion.button
+              <CyberButton
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={handleForwardTx}
                 disabled={isLoading || isApproving}
-                className={`w-full py-3 px-6 rounded-lg font-bold shadow-neon transition-all duration-300
-                  ${(isLoading || isApproving)
-                    ? 'bg-gray-600' 
-                    : 'bg-gradient-to-r from-cyber-blue to-cyber-purple hover:shadow-neon-lg'
-                  }`}
+                className="w-full"
               >
                 {isLoading ? (
                   <div className="flex items-center justify-center">
                     <LoadingSpinner />
-                    <span className="ml-2">Processing...</span>
+                    <span className="ml-2">Processing Transaction...</span>
                   </div>
                 ) : isApproving ? (
                   <div className="flex items-center justify-center">
@@ -602,7 +1104,7 @@ export default function RelayPage() {
                 ) : (
                   "Send Gasless Transaction"
                 )}
-              </motion.button>
+              </CyberButton>
 
               {forwardStatus && (
                 <motion.div
@@ -620,15 +1122,40 @@ export default function RelayPage() {
                 </motion.div>
               )}
 
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
                 onClick={importTestToken}
-                className="text-sm text-cyber-blue hover:text-cyber-pink"
+                className="text-sm text-cyan-400 hover:text-cyan-300
+                          transition-colors duration-300"
               >
                 Import Test Token to MetaMask
-              </button>
+              </motion.button>
+
+              <TransactionHistory />
+              <GasSavings />
             </motion.div>
           )}
-        </div>
+        </CyberPanel>
+
+        {/* Network Status Indicator */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="mt-4 text-center text-sm text-cyan-400/60"
+        >
+          {connected ? (
+            <div className="flex items-center justify-center space-x-2">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+              <span>Connected to Network</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center space-x-2">
+              <div className="w-2 h-2 bg-red-400 rounded-full" />
+              <span>Not Connected</span>
+            </div>
+          )}
+        </motion.div>
       </motion.div>
     </div>
   );

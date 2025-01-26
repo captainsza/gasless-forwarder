@@ -20,6 +20,13 @@ contract Forwarder is ReentrancyGuard, Pausable, Ownable {
 
     mapping(bytes32 => bool) public executedTxs;
 
+    // Add replay protection
+    mapping(bytes32 => bool) public executedSignatures;
+
+    // Add rate limiting
+    mapping(address => uint256) public lastTxTimestamp;
+    uint256 public constant MIN_TIME_BETWEEN_TX = 1 minutes;
+
     bytes32 public constant EIP712_DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 public constant FORWARD_REQUEST_TYPEHASH = keccak256("ForwardRequest(address from,address to,uint256 value,uint256 gas,uint256 nonce,bytes data,uint256 validUntil)");
 
@@ -137,6 +144,15 @@ contract Forwarder is ReentrancyGuard, Pausable, Ownable {
         ForwardRequest memory req,
         bytes calldata signature
     ) public payable nonReentrant whenNotPaused {
+        // Add rate limiting
+        require(block.timestamp - lastTxTimestamp[req.from] >= MIN_TIME_BETWEEN_TX, "Rate limit");
+
+        // Add replay protection
+        bytes32 sigHash = keccak256(abi.encodePacked(signature));
+        require(!executedSignatures[sigHash], "Signature already used");
+        executedSignatures[sigHash] = true;
+        lastTxTimestamp[req.from] = block.timestamp;
+
         // Change to call verifyAndDebug for debugging
         require(verifyAndDebug(req, signature), "Forwarder: signature does not match request");
         require(req.nonce == nonces[req.from], "Forwarder: nonce mismatch");

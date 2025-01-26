@@ -1,7 +1,8 @@
-
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
 import { BrowserProvider } from 'ethers';
+import type { ExtendedEip1193Provider } from '../types/global';
 
 interface Window {
   ethereum?: {
@@ -14,66 +15,25 @@ interface Window {
 
 export function useEthereum() {
   const [hasMetaMask, setHasMetaMask] = useState(false);
-  const [chainId, setChainId] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
+  const [ethereum, setEthereum] = useState<ExtendedEip1193Provider | undefined>(undefined);
 
   useEffect(() => {
-    const checkMetaMask = async () => {
-      if (typeof window !== 'undefined' && (window as Window).ethereum) {
-        const ethereum = (window as Window).ethereum;
-        const hasMetaMask = !!ethereum?.isMetaMask;
-        setHasMetaMask(hasMetaMask);
-        
-        if (hasMetaMask) {
-          try {
-            const provider = new BrowserProvider(ethereum);
-            setProvider(provider);
-            
-            const network = await provider.getNetwork();
-            setChainId(Number(network.chainId));
-
-            // Listen for network changes
-            ethereum.on('chainChanged', (id: string) => {
-              setChainId(parseInt(id, 16));
-            });
-          } catch (error) {
-            console.error('Error initializing provider:', error);
-          }
-        }
+    if (typeof window !== 'undefined' && window.ethereum) {
+      setHasMetaMask(!!window.ethereum.isMetaMask);
+      setEthereum(window.ethereum);
+      try {
+        const provider = new BrowserProvider(window.ethereum);
+        setProvider(provider);
+      } catch (error) {
+        console.error("Error creating provider:", error);
       }
-      setIsLoading(false);
-    };
-
-    checkMetaMask();
-
-    return () => {
-      if (window?.ethereum) {
-        window.ethereum.removeAllListeners('chainChanged');
-      }
-    };
-  }, []);
-
-  const switchNetwork = async (targetChainId: number): Promise<boolean> => {
-    if (!window?.ethereum) return false;
-
-    try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: `0x${targetChainId.toString(16)}` }],
-      });
-      return true;
-    } catch (error) {
-      console.error('Error switching network:', error);
-      return false;
     }
-  };
+  }, []);
 
   return {
     hasMetaMask,
-    chainId,
-    isLoading,
-    switchNetwork,
-    provider
+    provider,
+    ethereum
   };
 }
