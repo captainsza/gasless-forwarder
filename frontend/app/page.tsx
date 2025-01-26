@@ -714,13 +714,29 @@ export default function RelayPage() {
   };
 
   const importTestToken = async () => {
-    if (!window.ethereum) return;
+    console.log("Starting token import process...");
+    
+    if (!window.ethereum) {
+      console.error("MetaMask not available");
+      showAlert('error', 'MetaMask not installed');
+      return;
+    }
     
     const tokenAddress = process.env.NEXT_PUBLIC_TEST_TOKEN_ADDRESS;
-    if (!tokenAddress) return;
-
+    if (!tokenAddress) {
+      console.error("Test token address not configured");
+      showAlert('error', 'Test token address not found');
+      return;
+    }
+  
     try {
-      await window.ethereum.request({
+      console.log("Token import parameters:", {
+        address: tokenAddress,
+        symbol: 'TEST',
+        decimals: 18
+      });
+  
+      const wasAdded = await window.ethereum.request({
         method: 'wallet_watchAsset',
         params: {
           type: 'ERC20',
@@ -728,11 +744,36 @@ export default function RelayPage() {
             address: tokenAddress,
             symbol: 'TEST',
             decimals: 18,
+            // Optional image URL
+            image: 'https://your-token-image.png',
           },
         },
       });
-    } catch (error) {
-      console.error("Error importing token:", error);
+  
+      console.log("Token import result:", wasAdded);
+      
+      if (wasAdded) {
+        console.log("Token successfully added to MetaMask");
+        showAlert('success', 'Token added to MetaMask');
+        
+        // Verify token contract exists
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const code = await provider.getCode(tokenAddress);
+        console.log("Token contract verification:", {
+          address: tokenAddress,
+          hasCode: code !== '0x'
+        });
+      } else {
+        console.log("User rejected token import");
+        showAlert('warning', 'Token import cancelled');
+      }
+    } catch (error: any) {
+      console.error("Token import error:", {
+        message: error.message,
+        code: error.code,
+        data: error.data
+      });
+      showAlert('error', `Failed to import token: ${error.message}`);
     }
   };
 
@@ -856,24 +897,12 @@ export default function RelayPage() {
     }
   };
 
-  // Add new state variables
-  const [transactionHistory, setTransactionHistory] = useState<any[]>([]);
-  const [gasEstimate, setGasEstimate] = useState<string>("");
-
-  // Add gas estimation function
-  const estimateGas = async () => {
-    // ...implementation...
-  };
-
-  // Add transaction history display
   const TransactionHistory = () => (
     <motion.div className="mt-8 space-y-4">
       <h2 className="text-xl font-bold text-cyan-400">Transaction History</h2>
       {/* Transaction list */}
     </motion.div>
   );
-
-  // Add gas savings display
   const GasSavings = () => (
     <motion.div className="mt-4 p-4 border border-cyan-400/20 rounded-lg">
       <h3 className="text-lg font-bold text-cyan-400">Gas Savings</h3>
