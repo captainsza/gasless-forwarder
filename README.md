@@ -170,9 +170,7 @@ npx hardhat run scripts/deploy.ts --network localhost
 - [ ] Gas price oracle integration
 - [ ] More token standards support
 - [ ] Advanced transaction monitoring
-![Gasless Transaction Portal Image](docs/img0.png)
-![Gasless Transaction Portal Image](docs/img1.png)
-![Gasless Transaction Portal Image](docs/img2.png)
+
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details
