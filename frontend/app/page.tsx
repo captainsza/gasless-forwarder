@@ -936,7 +936,7 @@ export default function RelayPage() {
           >
             Gasless Transaction Portal
             <div className="text-sm font-normal text-cyan-400 mt-2">
-              by Zaid Ahmad
+              by QubitRules
             </div>
           </motion.h1>
 

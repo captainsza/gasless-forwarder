@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Gasless Transaction",
-  description: "by zaid ahmad",
+  description: "by QubitRules",
 };
 
 export default function RootLayout({
