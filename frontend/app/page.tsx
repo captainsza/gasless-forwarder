@@ -649,7 +649,7 @@ export default function RelayPage() {
 
 
       const tokenContract = new ethers.Contract(
-        ethers.getAddress(tokenAddress), // ensure checksummed address
+        ethers.getAddress(tokenAddress),
         ERC20_ABI,
         signer
       );
@@ -718,7 +718,7 @@ export default function RelayPage() {
             address: tokenAddress,
             symbol: 'TEST',
             decimals: 18,
-            // Optional image URL
+        
             image: 'https://your-token-image.png',
           },
         },
@@ -730,7 +730,7 @@ export default function RelayPage() {
         console.log("Token successfully added to MetaMask");
         showAlert('success', 'Token added to MetaMask');
         
-        // Verify token contract exists
+    
         const provider = new ethers.BrowserProvider(window.ethereum);
         const code = await provider.getCode(tokenAddress);
         console.log("Token contract verification:", {
@@ -780,7 +780,7 @@ export default function RelayPage() {
     
     try {
       const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      if (chainId !== '0x539') { // 1337 in hex
+      if (chainId !== '0x539') { 
         await window.ethereum.request({
           method: 'wallet_switchEthereumChain',
           params: [{ chainId: '0x539' }],
@@ -822,7 +822,7 @@ export default function RelayPage() {
         throw new Error("MetaMask not found");
       }
       
-      // Add network check
+    
       const networkValid = await checkAndSwitchNetwork();
       if (!networkValid) {
         throw new Error("Please connect to Hardhat Local network");
@@ -836,8 +836,6 @@ export default function RelayPage() {
       if (!verifyingContract) {
         throw new Error("Forwarder address not configured");
       }
-  
-      // Add 0x prefix if missing
       const formattedAddress = verifyingContract.startsWith('0x') 
         ? verifyingContract 
         : `0x${verifyingContract}`;
@@ -848,7 +846,7 @@ export default function RelayPage() {
   
       console.log("Validating forwarder contract:", formattedAddress);
   
-      // Check contract deployment with retries
+    
       for (let i = 0; i < 3; i++) {
         const code = await provider.getCode(formattedAddress);
         if (code !== '0x') {
@@ -862,14 +860,12 @@ export default function RelayPage() {
         }
       }
   
-      // Create contract instance
       const forwarderContract = new ethers.Contract(
         formattedAddress,
         ["function getNonce(address) view returns (uint256)"],
         provider
       );
-  
-      // Test contract call
+
       const testAddress = ethers.ZeroAddress;
       const result = await forwarderContract.getNonce.staticCall(testAddress);
       console.log("Contract test successful, nonce:", result.toString());
@@ -892,7 +888,7 @@ export default function RelayPage() {
     }
   }, [connected]);
 
-  // Add animation variants
+
   const containerVariants = {
     hidden: { opacity: 0, scale: 0.95 },
     visible: {
